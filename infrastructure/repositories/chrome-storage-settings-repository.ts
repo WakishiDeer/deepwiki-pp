@@ -12,7 +12,8 @@ export class ChromeStorageSettingsRepository implements ISettingsPort {
         return DEFAULT_SETTINGS;
       }
 
-      const result = await chrome.storage.sync.get(["host1", "host2"]);
+      const keys = Object.keys(DEFAULT_SETTINGS);
+      const result = await chrome.storage.sync.get(keys);
       return {
         host1: result.host1 || DEFAULT_SETTINGS.host1,
         host2: result.host2 || DEFAULT_SETTINGS.host2,
