@@ -1,89 +1,36 @@
-import { transformUrl } from "../../utils/transform";
+import { TabSwitchUseCase } from "../../application/usecases/tab-switch";
+import { ChromeStorageSettingsRepository } from "../../infrastructure/repositories/chrome-storage-settings-repository";
+import { ChromeTabGateway } from "../../infrastructure/gateways/chrome-tab-gateway";
+import { Message } from "../../shared/messaging";
 
 export default defineBackground(() => {
   console.log("Background script started");
 
-  // Storage utility for chrome.storage.sync
-  class StorageUtil {
-    async get(key: string): Promise<string | null> {
-      try {
-        if (!chrome?.storage?.sync) {
-          console.warn("Chrome storage API not available");
-          return null;
-        }
-        const result = await chrome.storage.sync.get([key]);
-        return result[key] || null;
-      } catch (error) {
-        console.error("Error getting storage value:", error);
-        return null;
-      }
-    }
-
-    async set(key: string, value: string): Promise<void> {
-      try {
-        if (!chrome?.storage?.sync) {
-          console.warn("Chrome storage API not available");
-          return;
-        }
-        await chrome.storage.sync.set({ [key]: value });
-      } catch (error) {
-        console.error("Error setting storage value:", error);
-      }
-    }
-  }
-
-  const storage = new StorageUtil();
-
-  // Message types
-  interface SwitchTabMessage {
-    action: "switchTab";
-    tabId: number;
-  }
-
-  interface CheckCanSwitchMessage {
-    action: "checkCanSwitch";
-    url: string;
-  }
-
-  type Message = SwitchTabMessage | CheckCanSwitchMessage;
-
-  // Helper function to safely use chrome.action API
-  async function setBadge(tabId: number, text: string): Promise<void> {
-    try {
-      if (chrome?.action?.setBadgeText) {
-        await chrome.action.setBadgeText({ text, tabId });
-      } else {
-        console.warn("chrome.action.setBadgeText not available");
-      }
-    } catch (error) {
-      console.error("Error setting badge:", error);
-    }
-  }
+  // Initialize dependencies
+  const settingsPort = new ChromeStorageSettingsRepository();
+  const tabGateway = new ChromeTabGateway();
+  const tabSwitchUseCase = new TabSwitchUseCase(settingsPort);
 
   // Main switching logic
   async function switchTab(tabId: number, url?: string): Promise<void> {
     try {
       // Get current tab info if URL not provided
       if (!url) {
-        const tab = await chrome.tabs.get(tabId);
+        const tab = await tabGateway.getCurrentTab(tabId);
         if (!tab.url) {
           throw new Error("No URL available");
         }
         url = tab.url;
       }
 
-      // Get host configuration
-      const host1 = (await storage.get("host1")) || "github.com";
-      const host2 = (await storage.get("host2")) || "deepwiki.com";
-
-      // Transform URL
-      const newUrl = transformUrl(url, [[host1, host2]]);
+      // Transform URL using use case
+      const newUrl = await tabSwitchUseCase.transformUrl(url);
 
       if (newUrl) {
-        await chrome.tabs.update(tabId, { url: newUrl });
-        await setBadge(tabId, "");
+        await tabGateway.updateTab(tabId, newUrl);
+        await tabGateway.setBadge(tabId, "");
       } else {
-        await setBadge(tabId, "⚠️");
+        await tabGateway.setBadge(tabId, "⚠️");
         throw new Error("URL transformation failed");
       }
     } catch (error) {
@@ -94,22 +41,13 @@ export default defineBackground(() => {
 
   // Check if a URL can be switched
   async function checkCanSwitch(url: string): Promise<boolean> {
-    try {
-      const host1 = (await storage.get("host1")) || "github.com";
-      const host2 = (await storage.get("host2")) || "deepwiki.com";
-
-      const parsedUrl = new URL(url);
-      return parsedUrl.hostname === host1 || parsedUrl.hostname === host2;
-    } catch (error) {
-      console.error("Error checking URL:", error);
-      return false;
-    }
+    return await tabSwitchUseCase.canSwitchUrl(url);
   }
 
   // Helper function to update badge text
   async function updateBadge(tabId: number, canSwitch: boolean): Promise<void> {
     const text = canSwitch ? "" : "⚠️";
-    await setBadge(tabId, text);
+    await tabGateway.setBadge(tabId, text);
   }
 
   // Handle messages from popup
@@ -159,11 +97,11 @@ export default defineBackground(() => {
   chrome.tabs.onActivated.addListener(
     async (activeInfo: chrome.tabs.TabActiveInfo) => {
       try {
-        const tab = await chrome.tabs.get(activeInfo.tabId);
+        const tab = await tabGateway.getCurrentTab(activeInfo.tabId);
         if (tab.url) {
           const canSwitch = await checkCanSwitch(tab.url);
           // Clear badge when tab becomes active
-          await setBadge(activeInfo.tabId, "");
+          await tabGateway.setBadge(activeInfo.tabId, "");
         }
       } catch (error) {
         console.error("Error handling tab activation:", error);
