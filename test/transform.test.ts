@@ -1,4 +1,4 @@
-import { transformUrl } from "../utils/transform";
+import { transformUrl } from "../domain/services/transform-url";
 
 describe("transformUrl", () => {
   test("github to deepwiki - extracts owner/repo path", () => {
