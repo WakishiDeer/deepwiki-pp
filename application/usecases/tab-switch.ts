@@ -1,5 +1,5 @@
-import { transformUrl } from "../../domain/services/transform-url";
-import { TabSwitchSettings } from "../../domain/entities/tab-switch-settings";
+import { transformUrl } from "../../domain/tab-switching/services/transform-url";
+import { TabSwitchSettings } from "../../domain/tab-switching/entities/tab-switch-settings";
 
 export interface ISettingsPort {
   getSettings(): Promise<TabSwitchSettings>;
