@@ -26,3 +26,15 @@ export class ParseError extends DomainError {
     super(message, "PARSE_ERROR");
   }
 }
+
+export class InvalidSectionError extends DomainError {
+  constructor(message: string) {
+    super(message, "INVALID_SECTION");
+  }
+}
+
+export class StorageQuotaExceededError extends RepositoryError {
+  constructor(message: string) {
+    super(message);
+  }
+}
