@@ -1,15 +1,22 @@
-// Tab Switching Bounded Context
-// Exports for tab switching and URL transformation functionality
+/**
+ * Tab Switching Bounded Context
+ * Public API for tab switching and URL transformation functionality
+ */
 
-// Entities
-export * from "./entities/tab-switch-settings";
+// Core entity and factory
+export type { TabSwitchSettings } from "./tab-switch-settings";
+export {
+  DEFAULT_SETTINGS,
+  createTabSwitchSettings,
+  validateTabSwitchSettings,
+  isTabSwitchSettings,
+  updateTabSwitchSettings,
+} from "./tab-switch-settings";
 
-// Services
-export * from "./services/transform-url";
-
-// Re-exports for convenience
-export type { TabSwitchSettings } from "./entities/tab-switch-settings";
-
-export { DEFAULT_SETTINGS } from "./entities/tab-switch-settings";
-
-export { transformUrl } from "./services/transform-url";
+// URL transformation service
+export type { HostPair } from "./transform-url";
+export {
+  transformUrl,
+  canTransformUrl,
+  getSupportedHosts,
+} from "./transform-url";
