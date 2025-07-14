@@ -1,12 +1,11 @@
 import {
   HeadingSection,
   IHeadingSectionRepository,
-  RepositoryError,
-  StorageQuotaExceededError,
-  InvalidSectionError,
   createHeadingSection,
   isHeadingSection,
 } from "../../../domain/heading-collection";
+
+import { RepositoryError, ValidationError } from "../../../domain/shared";
 
 /**
  * Input DTO for adding a heading section
@@ -240,34 +239,29 @@ export class AddHeadingSectionUseCase {
       };
     }
 
-    // Storage quota exceeded
-    if (error instanceof StorageQuotaExceededError) {
+    // Repository errors (including storage quota issues)
+    if (error instanceof RepositoryError) {
+      const isQuotaError =
+        error.message.toLowerCase().includes("quota") ||
+        error.message.toLowerCase().includes("storage");
+
       return {
         success: false,
-        errorCode: "STORAGE_QUOTA_EXCEEDED",
-        message:
-          "Storage quota exceeded. Please remove some sections and try again.",
-        details: { originalError: error.message },
+        errorCode: isQuotaError ? "STORAGE_QUOTA_EXCEEDED" : "REPOSITORY_ERROR",
+        message: isQuotaError
+          ? "Storage quota exceeded. Please remove some sections and try again."
+          : "Failed to save section to storage",
+        details: { originalError: (error as Error).message },
       };
     }
 
-    // Invalid section errors
-    if (error instanceof InvalidSectionError) {
+    // Validation errors
+    if (error instanceof ValidationError) {
       return {
         success: false,
         errorCode: "INVALID_INPUT",
-        message: error.message,
-        details: { originalError: error.message },
-      };
-    }
-
-    // Repository errors
-    if (error instanceof RepositoryError) {
-      return {
-        success: false,
-        errorCode: "REPOSITORY_ERROR",
-        message: "Failed to save section to storage",
-        details: { originalError: error.message, cause: error.cause },
+        message: (error as Error).message,
+        details: { originalError: (error as Error).message },
       };
     }
 

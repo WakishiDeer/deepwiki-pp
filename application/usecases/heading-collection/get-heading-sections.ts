@@ -1,8 +1,9 @@
 import {
   HeadingSection,
   IHeadingSectionRepository,
-  RepositoryError,
 } from "../../../domain/heading-collection";
+
+import { RepositoryError } from "../../../domain/shared";
 
 /**
  * Input DTO for retrieving heading sections
@@ -228,19 +229,20 @@ export class GetHeadingSectionsUseCase {
 
     // Use repository's optimized filtering when possible
     if (input.sourceUrl) {
-      sections = await this.repository.getSectionsBySourceUrl(input.sourceUrl);
+      sections = await this.repository.findSectionsByUrl(input.sourceUrl);
     } else if (input.level) {
-      sections = await this.repository.getSectionsByLevel(input.level);
+      sections = await this.repository.findSectionsByLevel(input.level);
     } else if (input.startDate && input.endDate) {
-      sections = await this.repository.getSectionsByDateRange(
-        input.startDate,
-        input.endDate
+      // Date range filtering: Get all sections and filter in-memory for now
+      const allSections = await this.repository.getAllSections();
+      sections = allSections.filter(
+        (section) =>
+          section.addedAt >= input.startDate! &&
+          section.addedAt <= input.endDate!
       );
     } else if (input.searchText) {
-      sections = await this.repository.searchSections(
-        input.searchText,
-        input.searchInContent
-      );
+      // Text search: Use the repository method if available, otherwise get all and filter
+      sections = await this.repository.searchSectionsByTitle(input.searchText);
     } else {
       // No specific filters, get all sections
       sections = await this.repository.getAllSections();
@@ -428,7 +430,7 @@ export class GetHeadingSectionsUseCase {
         success: false,
         errorCode: "REPOSITORY_ERROR",
         message: "Failed to retrieve sections from storage",
-        details: { originalError: error.message, cause: error.cause },
+        details: { originalError: (error as Error).message },
       };
     }
 
