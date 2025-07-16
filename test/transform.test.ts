@@ -1,4 +1,4 @@
-import { transformUrl } from "../domain/services/transform-url";
+import { transformUrl } from "../domain/tab-switching/transform-url";
 
 describe("transformUrl", () => {
   test("github to deepwiki - extracts owner/repo path", () => {

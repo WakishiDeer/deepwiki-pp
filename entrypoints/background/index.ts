@@ -1,6 +1,13 @@
 import { TabSwitchUseCase } from "../../application/usecases/tab-switch";
 import { ChromeStorageSettingsRepository } from "../../infrastructure/repositories/chrome-storage-settings-repository";
-import { ChromeTabGateway } from "../../infrastructure/gateways/chrome-tab-gateway";
+import { ChromeStorageHeadingSectionRepository } from "../../infrastructure/repositories/chrome-storage-heading-section-repository";
+import { ChromeTabGateway } from "../../infrastructure/gateways/tab/chrome-tab-gateway";
+import {
+  AddHeadingSectionUseCase,
+  GetHeadingSectionsUseCase,
+  RemoveHeadingSectionUseCase,
+  ClearAllHeadingSectionsUseCase,
+} from "../../application/usecases/heading-collection";
 import { Message } from "../../shared/messaging";
 
 export default defineBackground(() => {
@@ -8,8 +15,21 @@ export default defineBackground(() => {
 
   // Initialize dependencies
   const settingsPort = new ChromeStorageSettingsRepository();
+  const headingSectionRepository = new ChromeStorageHeadingSectionRepository();
   const tabGateway = new ChromeTabGateway();
   const tabSwitchUseCase = new TabSwitchUseCase(settingsPort);
+  const addHeadingSectionUseCase = new AddHeadingSectionUseCase(
+    headingSectionRepository
+  );
+  const getHeadingSectionsUseCase = new GetHeadingSectionsUseCase(
+    headingSectionRepository
+  );
+  const removeHeadingSectionUseCase = new RemoveHeadingSectionUseCase(
+    headingSectionRepository
+  );
+  const clearAllHeadingSectionsUseCase = new ClearAllHeadingSectionsUseCase(
+    headingSectionRepository
+  );
 
   // Main switching logic
   async function switchTab(tabId: number, url?: string): Promise<void> {
@@ -50,7 +70,7 @@ export default defineBackground(() => {
     await tabGateway.setBadge(tabId, text);
   }
 
-  // Handle messages from popup
+  // Handle messages from popup and content scripts
   chrome.runtime.onMessage.addListener(
     (
       request: Message,
@@ -73,6 +93,142 @@ export default defineBackground(() => {
           .catch((error) => {
             console.error("Error checking switch capability:", error);
             sendResponse({ canSwitch: false });
+          });
+        return true; // Will respond asynchronously
+      }
+
+      if (request.action === "addHeadingSection") {
+        console.log(
+          "Background: Adding heading section:",
+          request.headingSection
+        );
+
+        addHeadingSectionUseCase
+          .execute(request.headingSection)
+          .then((result) => {
+            console.log(
+              "Background: Heading section operation result:",
+              result
+            );
+
+            if (result.success) {
+              sendResponse({ success: true, sectionId: result.sectionId });
+            } else {
+              sendResponse({
+                success: false,
+                error: result.message,
+                errorCode: result.errorCode,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Background: Error adding heading section:", error);
+            sendResponse({
+              success: false,
+              error: error.message || "Failed to add heading section",
+            });
+          });
+        return true; // Will respond asynchronously
+      }
+
+      if (request.action === "getHeadingSections") {
+        console.log("Background: Getting heading sections");
+
+        getHeadingSectionsUseCase
+          .execute(request.input || {})
+          .then((result) => {
+            console.log("Background: Get heading sections result:", result);
+
+            if (result.success) {
+              sendResponse({
+                success: true,
+                sections: result.sections,
+                totalCount: result.totalCount,
+                metadata: result.metadata,
+              });
+            } else {
+              sendResponse({
+                success: false,
+                error: result.message,
+                errorCode: result.errorCode,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Background: Error getting heading sections:", error);
+            sendResponse({
+              success: false,
+              error: error.message || "Failed to get heading sections",
+              sections: [],
+            });
+          });
+        return true; // Will respond asynchronously
+      }
+
+      if (request.action === "clearAllHeadingSections") {
+        console.log("Background: Clearing all heading sections");
+
+        clearAllHeadingSectionsUseCase
+          .execute()
+          .then((result) => {
+            console.log("Background: Clear all sections result:", result);
+
+            if (result.success) {
+              console.log(
+                `Background: ${result.clearedCount} heading sections cleared successfully`
+              );
+              sendResponse({
+                success: true,
+                clearedCount: result.clearedCount,
+              });
+            } else {
+              sendResponse({
+                success: false,
+                error: result.message,
+                errorCode: result.errorCode,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error(
+              "Background: Error clearing heading sections:",
+              error
+            );
+            sendResponse({
+              success: false,
+              error: error.message || "Failed to clear heading sections",
+            });
+          });
+        return true; // Will respond asynchronously
+      }
+
+      if (request.action === "removeHeadingSection") {
+        console.log("Background: Removing heading section:", request.sectionId);
+
+        removeHeadingSectionUseCase
+          .execute({ sectionId: request.sectionId })
+          .then((result) => {
+            console.log("Background: Section removal result:", result);
+
+            if (result.success) {
+              sendResponse({
+                success: true,
+                removedSectionId: result.removedSectionId,
+              });
+            } else {
+              sendResponse({
+                success: false,
+                error: result.message,
+                errorCode: result.errorCode,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Background: Error removing heading section:", error);
+            sendResponse({
+              success: false,
+              error: error.message || "Failed to remove heading section",
+            });
           });
         return true; // Will respond asynchronously
       }

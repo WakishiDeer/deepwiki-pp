@@ -1,5 +1,8 @@
-import { transformUrl } from "../../domain/services/transform-url";
-import { TabSwitchSettings } from "../../domain/entities/tab-switch-settings";
+import {
+  transformUrl,
+  HostPair,
+} from "../../domain/tab-switching/transform-url";
+import { TabSwitchSettings } from "../../domain/tab-switching/tab-switch-settings";
 
 export interface ISettingsPort {
   getSettings(): Promise<TabSwitchSettings>;
@@ -26,7 +29,9 @@ export class TabSwitchUseCase {
   async transformUrl(url: string): Promise<string | null> {
     try {
       const settings = await this.settingsPort.getSettings();
-      return transformUrl(url, [[settings.host1, settings.host2]]);
+      return transformUrl(url, [
+        { host1: settings.host1, host2: settings.host2 },
+      ]);
     } catch (error) {
       console.error("Error transforming URL:", error);
       return null;
