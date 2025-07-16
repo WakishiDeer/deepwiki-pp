@@ -1,7 +1,7 @@
 import {
   TabSwitchSettings,
   DEFAULT_SETTINGS,
-} from "../../domain/entities/tab-switch-settings";
+} from "../../domain/tab-switching/tab-switch-settings";
 import { ISettingsPort } from "../../application/usecases/tab-switch";
 
 export class ChromeStorageSettingsRepository implements ISettingsPort {
