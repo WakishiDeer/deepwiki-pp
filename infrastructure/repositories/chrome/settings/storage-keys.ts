@@ -7,4 +7,5 @@ export const SETTINGS_STORAGE_KEYS = {
   HOST2: "host2",
 } as const;
 
-export type SettingsStorageKey = typeof SETTINGS_STORAGE_KEYS[keyof typeof SETTINGS_STORAGE_KEYS];
+export type SettingsStorageKey =
+  (typeof SETTINGS_STORAGE_KEYS)[keyof typeof SETTINGS_STORAGE_KEYS];
