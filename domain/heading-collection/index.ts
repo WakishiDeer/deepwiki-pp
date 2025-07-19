@@ -10,6 +10,7 @@ export {
   isHeadingSection,
   serializeHeadingSection,
   deserializeHeadingSection,
+  generateContentBasedId,
 } from "./heading-section";
 
 // Parser service
