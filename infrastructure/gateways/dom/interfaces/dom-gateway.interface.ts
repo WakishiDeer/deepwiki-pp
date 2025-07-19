@@ -90,4 +90,11 @@ export interface IDomGateway {
    * Stops SPA monitoring
    */
   stopSPAMonitoring(): void;
+
+  /**
+   * Waits for content stabilization including Mermaid diagrams
+   * @param container - Container element to monitor
+   * @returns Promise that resolves when content is stable
+   */
+  waitForContentStabilization(container: Element): Promise<void>;
 }
