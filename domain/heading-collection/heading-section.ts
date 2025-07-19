@@ -267,3 +267,57 @@ function generateUniqueSectionId(params: {
     return `${fallbackSlug}-h${params.level}-${timestamp}-${random}`;
   }
 }
+
+/**
+ * Generates a deterministic content-based identifier for duplicate detection
+ * This function creates consistent IDs based only on content, not time/random factors
+ */
+export function generateContentBasedId(params: {
+  sourceUrl: string;
+  level: number;
+  titleText: string;
+}): string {
+  try {
+    const url = new URL(params.sourceUrl);
+    const hostname = url.hostname
+      .replace(/^www\./, "")
+      .replace(/[^\w-]/g, "-")
+      .toLowerCase();
+
+    // Normalize the title text for consistent comparison
+    const titleSlug = params.titleText
+      .trim()
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 50); // Longer title for better uniqueness
+
+    // Use pathname for more specificity (optional)
+    const pathSlug = url.pathname
+      .replace(/[^\w-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 20);
+
+    return `content-${hostname}${pathSlug ? `-${pathSlug}` : ""}-h${
+      params.level
+    }-${titleSlug}`;
+  } catch (error) {
+    const fallbackSlug = params.sourceUrl
+      .replace(/[^\w-]/g, "-")
+      .substring(0, 30);
+
+    const titleSlug = params.titleText
+      .trim()
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 30);
+
+    return `content-${fallbackSlug}-h${params.level}-${titleSlug}`;
+  }
+}
