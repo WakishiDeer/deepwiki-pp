@@ -114,9 +114,9 @@ function HeadingSectionItem({
   const formatDate = (dateValue: Date | string) => {
     try {
       if (typeof dateValue === "string") {
-        return new Date(dateValue).toLocaleDateString();
+        return new Date(dateValue).toLocaleString();
       } else if (dateValue instanceof Date) {
-        return dateValue.toLocaleDateString();
+        return dateValue.toLocaleString();
       } else {
         return "Unknown date";
       }
