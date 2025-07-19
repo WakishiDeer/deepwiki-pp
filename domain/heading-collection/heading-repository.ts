@@ -74,6 +74,16 @@ export interface IHeadingSectionRepository {
   sectionExists(sectionId: Id): Promise<boolean>;
 
   /**
+   * Finds a section with the same content (URL, level, title)
+   * Used for duplicate detection before adding new sections
+   */
+  findDuplicateSection(params: {
+    sourceUrl: string;
+    level: number;
+    titleText: string;
+  }): Promise<HeadingSection | null>;
+
+  /**
    * Gets the total count of stored sections
    */
   getSectionCount(): Promise<number>;
