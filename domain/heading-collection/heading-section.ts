@@ -24,6 +24,8 @@ export const HEADING_SELECTOR = HEADING_TAGS.map((tag) =>
   tag.toLowerCase()
 ).join(",");
 
+export const TITLE_SLUG_LENGTH_LIMIT = 50;
+
 /**
  * Domain entity representing a heading section extracted from a DeepWiki page
  */
@@ -292,7 +294,7 @@ export function generateContentBasedId(params: {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .substring(0, 50); // Longer title for better uniqueness
+      .substring(0, TITLE_SLUG_LENGTH_LIMIT); // Longer title for better uniqueness
 
     // Use pathname for more specificity (optional)
     const pathSlug = url.pathname
