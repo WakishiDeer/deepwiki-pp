@@ -14,7 +14,6 @@ export default defineContentScript({
     "file://*/*", // Allow local files for testing
     "http://localhost:*/*", // Allow local development server
     "https://localhost:*/*", // Allow local development server with HTTPS
-    "*://*/test-page.html", // Allow any test page
   ],
   main() {
     console.log("DeepWiki++: Content script loaded on DeepWiki");
@@ -129,21 +128,14 @@ export default defineContentScript({
         console.log(
           "DeepWiki++: Headings detected, proceeding with initialization"
         );
-
-        // Debug: Log page info
-        console.log("DeepWiki++: Page debug info:", {
-          url: window.location.href,
-          title: document.title,
-          contentAreaTag: contentArea.tagName,
-          contentAreaClass: contentArea.className,
-          contentAreaId: contentArea.id,
-          allHeadings: document.querySelectorAll("h1,h2,h3,h4,h5,h6").length,
-          contentAreaHeadings:
-            contentArea.querySelectorAll("h1,h2,h3,h4,h5,h6").length,
-        });
-
         // Clean up any existing buttons first
         domGateway.removeAddButtons();
+
+        // Wait for content to be fully stabilized (including Mermaid rendering)
+        console.log(
+          "DeepWiki++: Waiting for content stabilization before extraction..."
+        );
+        await domGateway.waitForContentStabilization(contentArea);
 
         // Extract all heading sections from the content area
         const headingSections = await domGateway.extractHeadingSections(
@@ -153,16 +145,6 @@ export default defineContentScript({
         console.log(
           `DeepWiki++: Found ${headingSections.length} heading sections on DeepWiki page`
         );
-
-        // Debug: Log each heading section
-        headingSections.forEach((section, index) => {
-          console.log(`DeepWiki++: Section ${index}:`, {
-            level: section.level,
-            title: section.titleText,
-            contentLength: section.contentHtml.length,
-            firstFewWords: section.contentHtml.substring(0, 100) + "...",
-          });
-        });
 
         // Insert add buttons for each section
         domGateway.insertAddButtons(headingSections, handleAddHeading);
