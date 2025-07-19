@@ -12,7 +12,7 @@ import {
   HeadingParser,
   HEADING_TAGS,
 } from "../domain/heading-collection";
-import { ChromeStorageHeadingSectionRepository } from "../infrastructure/repositories/chrome-storage-heading-section-repository";
+import { ChromeStorageHeadingSectionRepository } from "../infrastructure/repositories/chrome/heading-section/chrome-storage-heading-section-repository";
 import { ChromeDomGateway, IDomGateway } from "../infrastructure/gateways/dom";
 
 // Mock Chrome Storage API
@@ -157,7 +157,7 @@ describe("ChromeStorageHeadingSectionRepository", () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.message).toContain("Chrome storage quota exceeded");
+        expect(result.error.message).toContain("local storage quota exceeded");
       }
     });
   });

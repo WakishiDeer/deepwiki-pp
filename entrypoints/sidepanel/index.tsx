@@ -101,12 +101,101 @@ function HeadingSectionItem({
       : text;
   };
 
-  // Get domain from URL for display
-  const getSourceDomain = (url: string) => {
+  // Extract repository and page info from DeepWiki URL
+  const parseDeepWikiUrl = (
+    url: string
+  ): { repo: string; pageTitle: string; repoUrl: string } => {
     try {
-      return new URL(url).hostname;
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split("/").filter((p) => p);
+
+      if (pathParts.length >= 2) {
+        const repo = `${pathParts[0]}/${pathParts[1]}`;
+        const repoUrl = `${urlObj.origin}/${repo}`;
+
+        if (pathParts.length > 2) {
+          // Extract page title from slug
+          const pageSlug = pathParts.slice(2).join("-");
+          const pageTitle = formatPageTitle(pageSlug);
+          return { repo, pageTitle, repoUrl };
+        }
+
+        // Repository top page
+        return { repo, pageTitle: "Overview", repoUrl };
+      }
+
+      return { repo: urlObj.hostname, pageTitle: "", repoUrl: url };
     } catch {
-      return url;
+      return { repo: "Unknown", pageTitle: "", repoUrl: url };
+    }
+  };
+
+  // Convert URL slug to readable title
+  const formatPageTitle = (slug: string): string => {
+    // Remove number prefix (e.g., "1.1-", "1-", "2.3.1-")
+    const cleanSlug = slug.replace(/^\d+(\.\d+)*-/, "");
+
+    // Convert kebab-case to Title Case
+    return cleanSlug
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
+  // Smart navigation: update current tab if on same repo, otherwise open new tab
+  const navigateSmartly = async (targetUrl: string) => {
+    try {
+      // Get the current active tab
+      const [activeTab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!activeTab?.id || !activeTab?.url) {
+        // Fallback to new tab if no active tab
+        await chrome.tabs.create({ url: targetUrl });
+        return;
+      }
+
+      const currentUrl = activeTab.url;
+
+      // Check if both current and target are on DeepWiki
+      if (
+        currentUrl.includes("deepwiki.com") &&
+        targetUrl.includes("deepwiki.com")
+      ) {
+        try {
+          const currentUrlObj = new URL(currentUrl);
+          const targetUrlObj = new URL(targetUrl);
+
+          // Extract repository from both URLs
+          const getCurrentRepo = (url: URL) => {
+            const pathParts = url.pathname.split("/").filter((p) => p);
+            return pathParts.length >= 2
+              ? `${pathParts[0]}/${pathParts[1]}`
+              : null;
+          };
+
+          const currentRepo = getCurrentRepo(currentUrlObj);
+          const targetRepo = getCurrentRepo(targetUrlObj);
+
+          // If same repository, update current tab
+          if (currentRepo && targetRepo && currentRepo === targetRepo) {
+            await chrome.tabs.update(activeTab.id, { url: targetUrl });
+            return;
+          }
+        } catch (e) {
+          // URL parsing failed, fallback to new tab
+          console.error("Failed to parse URLs:", e);
+        }
+      }
+
+      // Different repository or not both on DeepWiki: open new tab
+      await chrome.tabs.create({ url: targetUrl });
+    } catch (error) {
+      console.error("Navigation failed:", error);
+      // Ultimate fallback
+      window.open(targetUrl, "_blank");
     }
   };
 
@@ -114,9 +203,9 @@ function HeadingSectionItem({
   const formatDate = (dateValue: Date | string) => {
     try {
       if (typeof dateValue === "string") {
-        return new Date(dateValue).toLocaleDateString();
+        return new Date(dateValue).toLocaleString();
       } else if (dateValue instanceof Date) {
-        return dateValue.toLocaleDateString();
+        return dateValue.toLocaleString();
       } else {
         return "Unknown date";
       }
@@ -151,8 +240,39 @@ function HeadingSectionItem({
               H{section.level}: {section.titleText}
             </h3>
             <div className="section-metadata">
-              <span>📄 {getSourceDomain(section.sourceUrl)}</span>
-              <span>📅 {formatDate(section.addedAt)}</span>
+              <div className="url-info">
+                {(() => {
+                  const { repo, pageTitle, repoUrl } = parseDeepWikiUrl(
+                    section.sourceUrl
+                  );
+                  return (
+                    <>
+                      <button
+                        onClick={() => navigateSmartly(repoUrl)}
+                        className="repo-link"
+                        title={`Go to ${repo} repository`}
+                      >
+                        📁 {repo}
+                      </button>
+                      {pageTitle && (
+                        <>
+                          <span className="separator">›</span>
+                          <button
+                            onClick={() => navigateSmartly(section.sourceUrl)}
+                            className="page-link"
+                            title={section.sourceUrl}
+                          >
+                            📄 {pageTitle}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              <span className="timestamp">
+                📅 {formatDate(section.addedAt)}
+              </span>
             </div>
           </div>
 
@@ -191,13 +311,13 @@ function HeadingSectionItem({
             />
           )}
           <div className="section-content-link">
-            <a
-              href={section.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => navigateSmartly(section.sourceUrl)}
+              className="view-original-button"
+              title="Navigate to original content"
             >
               🔗 View Original
-            </a>
+            </button>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 import { TabSwitchUseCase } from "../../application/usecases/tab-switch";
-import { ChromeStorageSettingsRepository } from "../../infrastructure/repositories/chrome-storage-settings-repository";
-import { ChromeStorageHeadingSectionRepository } from "../../infrastructure/repositories/chrome-storage-heading-section-repository";
+import { ChromeStorageSettingsRepository } from "../../infrastructure/repositories/chrome/settings/chrome-storage-settings-repository";
+import { ChromeStorageHeadingSectionRepository } from "../../infrastructure/repositories/chrome/heading-section/chrome-storage-heading-section-repository";
 import { ChromeTabGateway } from "../../infrastructure/gateways/tab/chrome-tab-gateway";
 import {
   AddHeadingSectionUseCase,

@@ -1,8 +1,14 @@
 import {
   HeadingSection,
   IHeadingSectionRepository,
+  isHeadingSection,
 } from "../../../../domain/heading-collection";
-import { Id, Result, RepositoryError } from "../../../../domain/shared";
+import {
+  Id,
+  Result,
+  RepositoryError,
+  ValidationError,
+} from "../../../../domain/shared";
 import { SECTION_LIST_KEY } from "./storage-keys";
 import { HeadingSectionStorageMapper } from "./storage-mapper";
 import { StorageQuotaUtils } from "./quota-utils";
@@ -106,6 +112,16 @@ export class ChromeStorageHeadingSectionRepository
    */
   async addSection(section: HeadingSection): Promise<Result<void>> {
     console.log("ChromeStorageRepository: Adding section:", section);
+
+    if (!isHeadingSection(section)) {
+      console.error(
+        "ChromeStorageRepository: Invalid section provided:",
+        section
+      );
+      return Result.failure(
+        new ValidationError("Invalid HeadingSection provided")
+      );
+    }
 
     try {
       const existingSections = await this.getAllSections();
@@ -276,6 +292,12 @@ export class ChromeStorageHeadingSectionRepository
    * Updates an existing heading section
    */
   async updateSection(section: HeadingSection): Promise<Result<void>> {
+    if (!isHeadingSection(section)) {
+      return Result.failure(
+        new ValidationError("Invalid HeadingSection provided for update")
+      );
+    }
+
     try {
       const existingSections = await this.getAllSections();
       const index = existingSections.findIndex(
@@ -323,6 +345,82 @@ export class ChromeStorageHeadingSectionRepository
   }
 
   /**
+   * Finds a duplicate section based on URL, level, and title
+   * Used for duplicate detection before adding new sections
+   */
+  async findDuplicateSection(params: {
+    sourceUrl: string;
+    level: number;
+    titleText: string;
+  }): Promise<HeadingSection | null> {
+    try {
+      const sections = await this.getAllSections();
+
+      // Normalize the input title text for consistent comparison
+      const normalizedInputTitle = params.titleText.trim().toLowerCase();
+
+      // Find a section that matches URL, level, and title (case-insensitive)
+      const duplicateSection = sections.find((section) => {
+        const normalizedSectionTitle = section.titleText.trim().toLowerCase();
+
+        return (
+          section.sourceUrl === params.sourceUrl &&
+          section.level === params.level &&
+          normalizedSectionTitle === normalizedInputTitle
+        );
+      });
+
+      return duplicateSection || null;
+    } catch (error) {
+      // Log error but don't throw - this is a best-effort check
+      console.warn("Error checking for duplicate sections:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Retrieves sections within a date range
+   */
+  async getSectionsByDateRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<HeadingSection[]> {
+    try {
+      const allSections = await this.getAllSections();
+      return allSections.filter(
+        (section) => section.addedAt >= startDate && section.addedAt <= endDate
+      );
+    } catch (error) {
+      throw new RepositoryError("Failed to get sections by date range");
+    }
+  }
+
+  /**
+   * Searches sections by text content
+   */
+  async searchSections(
+    searchText: string,
+    searchInContent: boolean = false
+  ): Promise<HeadingSection[]> {
+    try {
+      const allSections = await this.getAllSections();
+      const lowerSearchText = searchText.toLowerCase();
+
+      return allSections.filter((section) => {
+        const titleMatch = section.titleText
+          .toLowerCase()
+          .includes(lowerSearchText);
+        const contentMatch =
+          searchInContent &&
+          section.contentHtml.toLowerCase().includes(lowerSearchText);
+        return titleMatch || contentMatch;
+      });
+    } catch (error) {
+      throw new RepositoryError("Failed to search sections");
+    }
+  }
+
+  /**
    * Gets storage usage information
    */
   async getStorageInfo(): Promise<{
@@ -356,15 +454,35 @@ export class ChromeStorageHeadingSectionRepository
    * Private method to save sections to storage with validation
    */
   private async saveSections(sections: HeadingSection[]): Promise<void> {
+    console.log(
+      `ChromeStorageRepository: Saving ${sections.length} sections to storage`
+    );
+
     try {
       const serializedSections =
         HeadingSectionStorageMapper.serializeSections(sections);
+      const dataToStore = { [this.storageKey]: serializedSections };
+
+      console.log(
+        "ChromeStorageRepository: Serialized data to store:",
+        dataToStore
+      );
+
+      // Estimate storage size (rough calculation)
+      const estimatedSize = JSON.stringify(dataToStore).length;
+      console.log(
+        `ChromeStorageRepository: Estimated data size: ${estimatedSize} bytes`
+      );
 
       // Validate storage size before saving
       StorageQuotaUtils.validateStorageSize(serializedSections, this.useSync);
 
-      await this.storage.set({ [this.storageKey]: serializedSections });
+      await this.storage.set(dataToStore);
+      console.log(
+        "ChromeStorageRepository: Data saved to storage successfully"
+      );
     } catch (error) {
+      console.error("ChromeStorageRepository: Error saving to storage:", error);
       if (StorageQuotaUtils.isQuotaExceededError(error)) {
         throw new StorageQuotaExceededError(
           this.useSync ? "sync" : "local",
@@ -380,7 +498,7 @@ export class ChromeStorageHeadingSectionRepository
    * Handles storage errors and converts them to appropriate Result types
    */
   private handleStorageError(error: any, fallbackMessage: string): Result<any> {
-    if (error instanceof RepositoryError) {
+    if (error instanceof RepositoryError || error instanceof ValidationError) {
       return Result.failure(error);
     }
 
@@ -388,8 +506,11 @@ export class ChromeStorageHeadingSectionRepository
       return Result.failure(new RepositoryError(error.message));
     }
 
+    // Check if it's a quota exceeded error
     if (StorageQuotaUtils.isQuotaExceededError(error)) {
-      return Result.failure(new RepositoryError("Storage quota exceeded"));
+      return Result.failure(
+        new RepositoryError("Storage quota exceeded while performing operation")
+      );
     }
 
     return Result.failure(new RepositoryError(fallbackMessage));

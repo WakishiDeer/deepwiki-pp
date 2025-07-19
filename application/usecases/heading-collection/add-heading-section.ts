@@ -98,11 +98,34 @@ export class AddHeadingSectionUseCase {
       // Step 1: Validate input
       this.validateInput(input);
 
-      // Step 2: Create heading section entity
+      // Step 2: Check for content-based duplicates BEFORE creating the section
+      const duplicateSection = await this.repository.findDuplicateSection({
+        sourceUrl: input.sourceUrl,
+        level: input.level,
+        titleText: input.title.trim(),
+      });
+
+      if (duplicateSection) {
+        return {
+          success: false,
+          errorCode: "INVALID_INPUT",
+          message: `A section with the same content already exists on this page: "${duplicateSection.titleText}" (H${duplicateSection.level})`,
+          details: {
+            duplicateId: duplicateSection.sectionId,
+            existingSection: {
+              title: duplicateSection.titleText,
+              level: duplicateSection.level,
+              sourceUrl: duplicateSection.sourceUrl,
+              addedAt: duplicateSection.addedAt,
+            },
+          },
+        };
+      }
+
+      // Step 3: Create heading section entity
       const section = this.createHeadingSection(input);
 
-      // Step 3: Check if section already exists
-      // Now sectionId is always present, so this check always runs
+      // Step 4: Check if section ID already exists (fallback check)
       const exists = await this.repository.sectionExists(section.sectionId);
       if (exists) {
         return {
@@ -113,10 +136,10 @@ export class AddHeadingSectionUseCase {
         };
       }
 
-      // Step 4: Persist the section
+      // Step 5: Persist the section
       await this.repository.addSection(section);
 
-      // Step 5: Return success result
+      // Step 6: Return success result
       return {
         success: true,
         sectionId: section.sectionId,

@@ -166,6 +166,30 @@ class MockHeadingSectionRepository implements IHeadingSectionRepository {
     return this.sections.some((s) => s.sectionId === sectionId);
   }
 
+  async findDuplicateSection(params: {
+    sourceUrl: string;
+    level: number;
+    titleText: string;
+  }): Promise<HeadingSection | null> {
+    this.throwIfErrorSet();
+
+    // Normalize the input title text for consistent comparison
+    const normalizedInputTitle = params.titleText.trim().toLowerCase();
+
+    // Find a section that matches URL, level, and title (case-insensitive)
+    const duplicateSection = this.sections.find((section) => {
+      const normalizedSectionTitle = section.titleText.trim().toLowerCase();
+
+      return (
+        section.sourceUrl === params.sourceUrl &&
+        section.level === params.level &&
+        normalizedSectionTitle === normalizedInputTitle
+      );
+    });
+
+    return duplicateSection || null;
+  }
+
   async getSectionCount(): Promise<number> {
     this.throwIfErrorSet();
     return this.sections.length;
