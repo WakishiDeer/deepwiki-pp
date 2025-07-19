@@ -3,18 +3,7 @@ import { isHeadingSection } from "../../domain/heading-collection/heading-sectio
 import { AddHeadingSectionMessage } from "../../shared/messaging";
 
 export default defineContentScript({
-  matches: [
-    "https://deepwiki.com/*",
-    "https://*.deepwiki.com/*",
-    "https://deepwiki.corp/*",
-    "https://*.deepwiki.corp/*",
-    "https://wiki.corp/*",
-    "https://*.wiki.corp/*",
-    // Development/test patterns
-    "file://*/*", // Allow local files for testing
-    "http://localhost:*/*", // Allow local development server
-    "https://localhost:*/*", // Allow local development server with HTTPS
-  ],
+  matches: ["https://deepwiki.com/*"],
   main() {
     console.log("DeepWiki++: Content script loaded on DeepWiki");
 
