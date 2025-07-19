@@ -38,9 +38,9 @@ class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <div className="error-boundary">
-          <h2>❌ サイドパネルエラー</h2>
+          <h2>❌ Error on Sidepanel </h2>
           <details>
-            <summary>エラー詳細</summary>
+            <summary>Error Details</summary>
             <pre>{this.state.error?.message}</pre>
             <pre>{this.state.error?.stack}</pre>
             {this.state.errorInfo && (
@@ -53,7 +53,7 @@ class ErrorBoundary extends React.Component<
             }
             className="sidepanel-button sidepanel-button-retry"
           >
-            再試行
+            Retry
           </button>
         </div>
       );
