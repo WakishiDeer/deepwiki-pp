@@ -1,4 +1,7 @@
-import { IDomGateway } from "../interfaces/dom-gateway.interface";
+import {
+  IDomGateway,
+  DOM_TIMEOUT_CONSTANTS,
+} from "../interfaces/dom-gateway.interface";
 import {
   HeadingSection,
   HEADING_TAGS,
@@ -120,7 +123,7 @@ export class ChromeDomGateway implements IDomGateway {
         // Wait briefly before processing new content
         setTimeout(async () => {
           await this.handlePageChange(url, onButtonClick);
-        }, 500);
+        }, DOM_TIMEOUT_CONSTANTS.DEFAULT_INITIALIZATION_DEBOUNCE_DELAY);
       },
 
       // Content change callback
@@ -247,7 +250,7 @@ export class ChromeDomGateway implements IDomGateway {
       const hasHeadings = await this.spaMonitor.waitForElement(
         container,
         "h1,h2,h3,h4,h5,h6",
-        5000
+        DOM_TIMEOUT_CONSTANTS.DEFAULT_HEADING_WAIT_TIMEOUT
       );
 
       if (!hasHeadings) {
@@ -274,7 +277,10 @@ export class ChromeDomGateway implements IDomGateway {
         console.debug(
           "DeepWiki++: Detected pending Mermaid rendering – retrying extraction"
         );
-        await this.waitForMermaidRendering(container, 3000);
+        await this.waitForMermaidRendering(
+          container,
+          DOM_TIMEOUT_CONSTANTS.DEFAULT_MERMAID_RENDERING_TIMEOUT
+        );
         sections = await this.extractHeadingSections(container, sourceUrl);
       }
 
@@ -298,15 +304,19 @@ export class ChromeDomGateway implements IDomGateway {
   /**
    * Waits for content stabilization (headings + Mermaid diagrams)
    */
-  async waitForContentStabilization(container: Element): Promise<void> {
+  async waitForContentStabilization(
+    container: Element,
+    maxWaitTime: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_CONTENT_STABILIZATION_TIMEOUT
+  ): Promise<void> {
     let lastHeadingCount = 0;
     let lastDiagramCount = 0;
     let lastPendingDiagramCount = 0;
     let stableCount = 0;
 
-    const requiredStableChecks = 3;
-    const checkInterval = 200;
-    const maxWaitTime = 8000; // Increased for complex Mermaid rendering
+    const requiredStableChecks =
+      DOM_TIMEOUT_CONSTANTS.DEFAULT_CONTENT_STABILIZATION_STABLE_CHECKS;
+    const checkInterval =
+      DOM_TIMEOUT_CONSTANTS.DEFAULT_CONTENT_STABILIZATION_CHECK_INTERVAL;
 
     // Enhanced diagram selectors to catch more rendering states
     const renderedDiagramSelector =
@@ -370,7 +380,12 @@ export class ChromeDomGateway implements IDomGateway {
       console.debug("DeepWiki++: Final wait for remaining pending diagrams", {
         pendingCount: finalPendingCount,
       });
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          DOM_TIMEOUT_CONSTANTS.DEFAULT_PENDING_DIAGRAM_EXTRA_WAIT
+        )
+      );
     }
   }
 
@@ -435,7 +450,7 @@ export class ChromeDomGateway implements IDomGateway {
    */
   waitForHeadings(
     container: Element,
-    timeout: number = 10000
+    timeout: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_HEADING_WAIT_TIMEOUT
   ): Promise<boolean> {
     return new Promise((resolve) => {
       // Check if headings already exist
@@ -523,7 +538,7 @@ export class ChromeDomGateway implements IDomGateway {
     container: Element,
     sourceUrl: string,
     onButtonClick: (section: HeadingSection) => void,
-    delay: number = 500
+    delay: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_INITIALIZATION_DEBOUNCE_DELAY
   ): void {
     if (this.initializationDebounceTimer) {
       clearTimeout(this.initializationDebounceTimer);
@@ -534,7 +549,10 @@ export class ChromeDomGateway implements IDomGateway {
         console.debug("DeepWiki++: Running debounced initialization");
 
         // Wait for headings to appear
-        const headingsFound = await this.waitForHeadings(container, 5000);
+        const headingsFound = await this.waitForHeadings(
+          container,
+          DOM_TIMEOUT_CONSTANTS.DEFAULT_HEADING_WAIT_TIMEOUT
+        );
 
         if (!headingsFound) {
           console.warn("DeepWiki++: No headings found after waiting");
@@ -587,10 +605,11 @@ export class ChromeDomGateway implements IDomGateway {
    */
   private async waitForMermaidRendering(
     container: Element,
-    maxWait: number = 3000
+    maxWait: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_MERMAID_RENDERING_TIMEOUT
   ): Promise<void> {
     const startTime = Date.now();
-    const checkInterval = 300;
+    const checkInterval =
+      DOM_TIMEOUT_CONSTANTS.DEFAULT_MERMAID_RENDERING_CHECK_INTERVAL;
 
     while (Date.now() - startTime < maxWait) {
       const pendingElements = container.querySelectorAll(
