@@ -277,6 +277,44 @@
   border-radius: 4px;
 }
 
+/* Diagram container styles */
+.dwpp-diagram-wrapper {
+  max-width: 100%;
+  overflow: auto;
+}
+
+/* Only Mermaid SVGs should take full width */
+.dwpp-diagram-wrapper svg.dwpp-mermaid-svg {
+  width: 100%;
+  height: auto;
+}
+
+/* Non-Mermaid SVGs should maintain their intrinsic size */
+.dwpp-diagram-wrapper svg:not(.dwpp-mermaid-svg) {
+  width: auto;
+  max-width: 24px;
+  height: auto;
+}
+
+/* General content SVGs should also be constrained */
+.section-content-html svg {
+  width: auto;
+  max-width: 24px;
+  height: auto;
+}
+
+/* Mermaid diagram styling - only for diagram SVGs */
+.dwpp-mermaid-svg {
+  width: 100%;
+  height: auto;
+  transition: outline 0.15s ease;
+  outline: 2px solid transparent;
+}
+
+.dwpp-mermaid-svg:hover {
+  outline: 2px dashed #1976d2;
+}
+
 .section-content-link {
   margin-top: 8px;
   text-align: right;
