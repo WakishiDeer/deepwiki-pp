@@ -228,32 +228,6 @@ export class HeadingExtractorService {
   }
 
   /**
-   * Calculates section quality score (for future enhancement)
-   */
-  private calculateSectionQuality(section: HeadingSection): number {
-    let score = 0;
-
-    // Score based on title length
-    const titleLength = section.titleText.trim().length;
-    if (titleLength >= 5 && titleLength <= 100) {
-      score += 10;
-    }
-
-    // Score based on content length
-    const contentLength = section.contentHtml?.trim().length || 0;
-    if (contentLength > 50) {
-      score += 10;
-    }
-
-    // Score based on hierarchy level (h2-h4 is optimal)
-    if (section.level >= 2 && section.level <= 4) {
-      score += 5;
-    }
-
-    return score;
-  }
-
-  /**
    * Gets parser instance (for testing)
    */
   getParser(): HeadingParser {

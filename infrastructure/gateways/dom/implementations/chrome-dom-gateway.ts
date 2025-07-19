@@ -1,4 +1,7 @@
-import { IDomGateway } from "../interfaces/dom-gateway.interface";
+import {
+  IDomGateway,
+  DOM_TIMEOUT_CONSTANTS,
+} from "../interfaces/dom-gateway.interface";
 import {
   HeadingSection,
   HEADING_TAGS,
@@ -120,7 +123,7 @@ export class ChromeDomGateway implements IDomGateway {
         // Wait briefly before processing new content
         setTimeout(async () => {
           await this.handlePageChange(url, onButtonClick);
-        }, 500);
+        }, DOM_TIMEOUT_CONSTANTS.DEFAULT_INITIALIZATION_DEBOUNCE_DELAY);
       },
 
       // Content change callback
@@ -219,7 +222,17 @@ export class ChromeDomGateway implements IDomGateway {
     const isMarkdownContent =
       element.matches?.(".markdown-body, article, .prose") || false;
 
-    return hasHeadings || (hasSignificantContent && isMarkdownContent);
+    // Check if it's a Mermaid diagram element (enhanced detection)
+    const isMermaidElement =
+      element.matches?.(
+        'svg[id^="mermaid"], svg[aria-roledescription*="sequence"], svg[aria-roledescription*="flowchart"], svg[aria-roledescription*="graph"], div.mermaid, pre.mermaid, pre:has(code.language-mermaid), pre[class*="px-2"][class*="py-1"]'
+      ) || false;
+
+    return (
+      hasHeadings ||
+      (hasSignificantContent && isMarkdownContent) ||
+      isMermaidElement
+    );
   }
 
   /**
@@ -237,7 +250,7 @@ export class ChromeDomGateway implements IDomGateway {
       const hasHeadings = await this.spaMonitor.waitForElement(
         container,
         "h1,h2,h3,h4,h5,h6",
-        5000
+        DOM_TIMEOUT_CONSTANTS.DEFAULT_HEADING_WAIT_TIMEOUT
       );
 
       if (!hasHeadings) {
@@ -248,8 +261,28 @@ export class ChromeDomGateway implements IDomGateway {
       // Wait for dynamic content to fully load
       await this.waitForContentStabilization(container);
 
+      // Additional wait specifically for Mermaid diagrams
+      await this.waitForMermaidRendering(container);
+
       // Extract heading sections
-      const sections = await this.extractHeadingSections(container, sourceUrl);
+      let sections = await this.extractHeadingSections(container, sourceUrl);
+
+      // Fallback: if any section still contains pending Mermaid elements,
+      // wait longer and try once more
+      const hasPendingMermaid = sections.some((s) =>
+        this.containsPendingMermaidDiagrams(s.contentHtml)
+      );
+
+      if (hasPendingMermaid) {
+        console.debug(
+          "DeepWiki++: Detected pending Mermaid rendering – retrying extraction"
+        );
+        await this.waitForMermaidRendering(
+          container,
+          DOM_TIMEOUT_CONSTANTS.DEFAULT_MERMAID_RENDERING_TIMEOUT
+        );
+        sections = await this.extractHeadingSections(container, sourceUrl);
+      }
 
       if (sections.length === 0) {
         console.warn("DeepWiki++: No valid sections extracted");
@@ -269,27 +302,54 @@ export class ChromeDomGateway implements IDomGateway {
   }
 
   /**
-   * Waits for content stabilization
+   * Waits for content stabilization (headings + Mermaid diagrams)
    */
-  private async waitForContentStabilization(container: Element): Promise<void> {
-    // Monitor content changes at short intervals
+  async waitForContentStabilization(
+    container: Element,
+    maxWaitTime: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_CONTENT_STABILIZATION_TIMEOUT
+  ): Promise<void> {
     let lastHeadingCount = 0;
+    let lastDiagramCount = 0;
+    let lastPendingDiagramCount = 0;
     let stableCount = 0;
-    const requiredStableChecks = 3;
-    const checkInterval = 200;
-    const maxWaitTime = 2000;
+
+    const requiredStableChecks =
+      DOM_TIMEOUT_CONSTANTS.DEFAULT_CONTENT_STABILIZATION_STABLE_CHECKS;
+    const checkInterval =
+      DOM_TIMEOUT_CONSTANTS.DEFAULT_CONTENT_STABILIZATION_CHECK_INTERVAL;
+
+    // Enhanced diagram selectors to catch more rendering states
+    const renderedDiagramSelector =
+      'svg[id^="mermaid"], svg[aria-roledescription], div.mermaid svg, svg[viewBox]';
+    const pendingDiagramSelector =
+      'pre.mermaid, div.mermaid:empty, pre:has(code.language-mermaid), pre[class*="mermaid"], pre:empty[class*="px-"], pre:empty[class*="py-"]';
 
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
       const currentHeadingCount =
         container.querySelectorAll("h1,h2,h3,h4,h5,h6").length;
+      const currentDiagramCount = container.querySelectorAll(
+        renderedDiagramSelector
+      ).length;
+      const currentPendingDiagramCount = container.querySelectorAll(
+        pendingDiagramSelector
+      ).length;
 
-      if (currentHeadingCount === lastHeadingCount && currentHeadingCount > 0) {
+      // Check for stability: headings stable, diagrams stable, no pending diagrams
+      if (
+        currentHeadingCount === lastHeadingCount &&
+        currentDiagramCount === lastDiagramCount &&
+        currentPendingDiagramCount === lastPendingDiagramCount &&
+        currentHeadingCount > 0 && // Ensure headings are present
+        currentPendingDiagramCount === 0 // No diagrams are pending rendering
+      ) {
         stableCount++;
         if (stableCount >= requiredStableChecks) {
-          console.debug("DeepWiki++: Content appears stable", {
+          console.debug("DeepWiki++: Content + diagrams are stable", {
             headingCount: currentHeadingCount,
+            diagramCount: currentDiagramCount,
+            pendingDiagramCount: currentPendingDiagramCount,
             waitTime: Date.now() - startTime,
           });
           break;
@@ -297,9 +357,35 @@ export class ChromeDomGateway implements IDomGateway {
       } else {
         stableCount = 0;
         lastHeadingCount = currentHeadingCount;
+        lastDiagramCount = currentDiagramCount;
+        lastPendingDiagramCount = currentPendingDiagramCount;
+
+        // Log what's changing for debugging
+        if (currentPendingDiagramCount > 0) {
+          console.debug("DeepWiki++: Still waiting for diagram rendering", {
+            pendingDiagrams: currentPendingDiagramCount,
+            renderedDiagrams: currentDiagramCount,
+          });
+        }
       }
 
       await new Promise((resolve) => setTimeout(resolve, checkInterval));
+    }
+
+    // Final check: if there are still pending diagrams, wait extra time
+    const finalPendingCount = container.querySelectorAll(
+      pendingDiagramSelector
+    ).length;
+    if (finalPendingCount > 0) {
+      console.debug("DeepWiki++: Final wait for remaining pending diagrams", {
+        pendingCount: finalPendingCount,
+      });
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          DOM_TIMEOUT_CONSTANTS.DEFAULT_PENDING_DIAGRAM_EXTRA_WAIT
+        )
+      );
     }
   }
 
@@ -364,7 +450,7 @@ export class ChromeDomGateway implements IDomGateway {
    */
   waitForHeadings(
     container: Element,
-    timeout: number = 10000
+    timeout: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_HEADING_WAIT_TIMEOUT
   ): Promise<boolean> {
     return new Promise((resolve) => {
       // Check if headings already exist
@@ -452,7 +538,7 @@ export class ChromeDomGateway implements IDomGateway {
     container: Element,
     sourceUrl: string,
     onButtonClick: (section: HeadingSection) => void,
-    delay: number = 500
+    delay: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_INITIALIZATION_DEBOUNCE_DELAY
   ): void {
     if (this.initializationDebounceTimer) {
       clearTimeout(this.initializationDebounceTimer);
@@ -463,7 +549,10 @@ export class ChromeDomGateway implements IDomGateway {
         console.debug("DeepWiki++: Running debounced initialization");
 
         // Wait for headings to appear
-        const headingsFound = await this.waitForHeadings(container, 5000);
+        const headingsFound = await this.waitForHeadings(
+          container,
+          DOM_TIMEOUT_CONSTANTS.DEFAULT_HEADING_WAIT_TIMEOUT
+        );
 
         if (!headingsFound) {
           console.warn("DeepWiki++: No headings found after waiting");
@@ -494,5 +583,48 @@ export class ChromeDomGateway implements IDomGateway {
         );
       }
     }, delay);
+  }
+
+  /**
+   * Detects if content contains pending or partially rendered Mermaid diagrams
+   */
+  private containsPendingMermaidDiagrams(content: string): boolean {
+    const pendingPatterns = [
+      /<pre[^>]*class=["'][^"']*mermaid/i,
+      /<pre[^>]*class=["'][^"']*px-2[^"']*py-1[^"']*><\/pre>/i,
+      /<pre[^>]*>\s*<\/pre>/i,
+      /<div[^>]*class=["'][^"']*mermaid[^"']*>\s*<\/div>/i,
+      /<code[^>]*class=["'][^"']*language-mermaid/i,
+    ];
+
+    return pendingPatterns.some((pattern) => pattern.test(content));
+  }
+
+  /**
+   * Waits specifically for Mermaid diagrams to finish rendering in a container
+   */
+  private async waitForMermaidRendering(
+    container: Element,
+    maxWait: number = DOM_TIMEOUT_CONSTANTS.DEFAULT_MERMAID_RENDERING_TIMEOUT
+  ): Promise<void> {
+    const startTime = Date.now();
+    const checkInterval =
+      DOM_TIMEOUT_CONSTANTS.DEFAULT_MERMAID_RENDERING_CHECK_INTERVAL;
+
+    while (Date.now() - startTime < maxWait) {
+      const pendingElements = container.querySelectorAll(
+        'pre.mermaid:empty, pre:has(code.language-mermaid), pre[class*="px-2"]:empty, div.mermaid:not(:has(svg))'
+      );
+
+      if (pendingElements.length === 0) {
+        console.debug("DeepWiki++: All Mermaid diagrams appear to be rendered");
+        break;
+      }
+
+      console.debug(
+        `DeepWiki++: Waiting for ${pendingElements.length} Mermaid diagrams to render`
+      );
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
+    }
   }
 }

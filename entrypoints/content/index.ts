@@ -14,13 +14,16 @@ export default defineContentScript({
     "file://*/*", // Allow local files for testing
     "http://localhost:*/*", // Allow local development server
     "https://localhost:*/*", // Allow local development server with HTTPS
-    "*://*/test-page.html", // Allow any test page
   ],
   main() {
     console.log("DeepWiki++: Content script loaded on DeepWiki");
 
     // Initialize DOM gateway
     const domGateway = new ChromeDomGateway();
+
+    // Anti-flicker state tracking
+    let isInitializing = false;
+    let lastUrl = location.href;
 
     // Check if we're on a relevant DeepWiki page
     function isRelevantPage(): boolean {
@@ -93,19 +96,29 @@ export default defineContentScript({
 
     // Initialize the extension on the page
     async function initialize(): Promise<void> {
-      if (!isRelevantPage()) {
-        console.log(
-          "DeepWiki++: Not a relevant DeepWiki page, skipping initialization"
+      // Prevent overlapping initializations
+      if (isInitializing) {
+        console.debug(
+          "DeepWiki++: Initialization already in progress, skipping"
         );
         return;
       }
 
-      console.log(
-        "DeepWiki++: Starting initialization on DeepWiki page:",
-        window.location.href
-      );
+      isInitializing = true;
 
       try {
+        if (!isRelevantPage()) {
+          console.log(
+            "DeepWiki++: Not a relevant DeepWiki page, skipping initialization"
+          );
+          return;
+        }
+
+        console.log(
+          "DeepWiki++: Starting initialization on DeepWiki page:",
+          window.location.href
+        );
+
         // First, find the main content container
         const contentArea = domGateway.findMainContentContainer();
         if (!contentArea) {
@@ -130,20 +143,11 @@ export default defineContentScript({
           "DeepWiki++: Headings detected, proceeding with initialization"
         );
 
-        // Debug: Log page info
-        console.log("DeepWiki++: Page debug info:", {
-          url: window.location.href,
-          title: document.title,
-          contentAreaTag: contentArea.tagName,
-          contentAreaClass: contentArea.className,
-          contentAreaId: contentArea.id,
-          allHeadings: document.querySelectorAll("h1,h2,h3,h4,h5,h6").length,
-          contentAreaHeadings:
-            contentArea.querySelectorAll("h1,h2,h3,h4,h5,h6").length,
-        });
-
-        // Clean up any existing buttons first
-        domGateway.removeAddButtons();
+        // Wait for content to be fully stabilized (including Mermaid rendering)
+        console.log(
+          "DeepWiki++: Waiting for content stabilization before extraction..."
+        );
+        await domGateway.waitForContentStabilization(contentArea);
 
         // Extract all heading sections from the content area
         const headingSections = await domGateway.extractHeadingSections(
@@ -154,58 +158,93 @@ export default defineContentScript({
           `DeepWiki++: Found ${headingSections.length} heading sections on DeepWiki page`
         );
 
-        // Debug: Log each heading section
-        headingSections.forEach((section, index) => {
-          console.log(`DeepWiki++: Section ${index}:`, {
-            level: section.level,
-            title: section.titleText,
-            contentLength: section.contentHtml.length,
-            firstFewWords: section.contentHtml.substring(0, 100) + "...",
-          });
-        });
-
-        // Insert add buttons for each section
+        // Minimize flicker: remove old buttons just before inserting new ones
+        domGateway.removeAddButtons();
         domGateway.insertAddButtons(headingSections, handleAddHeading);
 
         console.log(
           `DeepWiki++: Successfully inserted buttons for ${headingSections.length} headings on DeepWiki page`
         );
+
+        // Update last processed URL
+        lastUrl = location.href;
       } catch (error) {
         console.error(
           "DeepWiki++: Error during DeepWiki page initialization:",
           error
         );
+      } finally {
+        isInitializing = false;
       }
+    }
+
+    // SPA navigation helper functions
+    function hookHistoryNavigation(): void {
+      const fireLocationChange = () => {
+        window.dispatchEvent(new Event("dwpp-location-change"));
+      };
+
+      // Hook into pushState and replaceState
+      ["pushState", "replaceState"].forEach((method) => {
+        const originalMethod = history[method as "pushState" | "replaceState"];
+        // @ts-ignore - preserving original method signature
+        history[method as "pushState" | "replaceState"] = function (...args) {
+          const result = originalMethod.apply(this, args);
+          fireLocationChange();
+          return result;
+        };
+      });
+
+      // Listen for browser back/forward navigation
+      window.addEventListener("popstate", fireLocationChange);
     }
 
     // Handle dynamic content loading and SPA navigation
     function startMonitoring(): void {
-      console.log("DeepWiki++: Starting SPA monitoring for dynamic content");
+      console.log("DeepWiki++: Starting enhanced SPA monitoring");
 
-      // Use the new SPA monitoring API with a simple debounced reinitialize
-      let reinitializeTimer: number | null = null;
-      const debouncedReinitialize = () => {
-        if (reinitializeTimer) {
-          clearTimeout(reinitializeTimer);
+      // Debounced re-initializer with URL tracking
+      let rerunTimer: number | undefined;
+      const rerun = () => {
+        // Skip if same URL and already processed
+        if (location.href === lastUrl || isInitializing) {
+          console.debug(
+            "DeepWiki++: Skipping rerun - same URL or already initializing"
+          );
+          return;
         }
-        reinitializeTimer = window.setTimeout(() => {
-          console.log("DeepWiki++: Executing debounced re-initialization");
-          initialize();
-        }, 500);
+
+        clearTimeout(rerunTimer);
+        rerunTimer = window.setTimeout(async () => {
+          console.debug(
+            "DeepWiki++: SPA navigation detected → re-initializing"
+          );
+          await initialize();
+        }, 400);
       };
 
-      domGateway.startSPAMonitoring(() => {
-        console.log(
-          "DeepWiki++: SPA navigation or content change detected, scheduling re-initialization"
-        );
-        debouncedReinitialize();
+      // Hook into History API for navigation detection
+      hookHistoryNavigation();
+      window.addEventListener("dwpp-location-change", rerun);
+
+      // Fallback: Monitor DOM changes for content swaps without history changes
+      const mutationObserver = new MutationObserver(rerun);
+      mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
       });
+
+      // Store observer reference for cleanup
+      (startMonitoring as any).observer = mutationObserver;
     }
 
     // Stop monitoring when page unloads
     function stopMonitoring(): void {
       console.log("DeepWiki++: Stopping SPA monitoring");
-      domGateway.stopSPAMonitoring();
+      window.removeEventListener("dwpp-location-change", () => {});
+      const observer: MutationObserver | undefined = (startMonitoring as any)
+        .observer;
+      observer?.disconnect();
     }
 
     // Start the extension

@@ -1,6 +1,28 @@
 import { HeadingSection } from "../../../../domain/heading-collection";
 
 /**
+ * Default timeout constants for DOM operations
+ */
+export const DOM_TIMEOUT_CONSTANTS = {
+  /** Default maximum wait time for content stabilization (ms) */
+  DEFAULT_CONTENT_STABILIZATION_TIMEOUT: 8000,
+  /** Default check interval for content stabilization (ms) */
+  DEFAULT_CONTENT_STABILIZATION_CHECK_INTERVAL: 200,
+  /** Default number of required stable checks */
+  DEFAULT_CONTENT_STABILIZATION_STABLE_CHECKS: 3,
+  /** Default timeout for waiting for headings (ms) */
+  DEFAULT_HEADING_WAIT_TIMEOUT: 5000,
+  /** Default timeout for Mermaid rendering (ms) */
+  DEFAULT_MERMAID_RENDERING_TIMEOUT: 3000,
+  /** Default check interval for Mermaid rendering (ms) */
+  DEFAULT_MERMAID_RENDERING_CHECK_INTERVAL: 300,
+  /** Default debounce delay for initialization scheduling (ms) */
+  DEFAULT_INITIALIZATION_DEBOUNCE_DELAY: 500,
+  /** Default extra wait time for pending diagrams (ms) */
+  DEFAULT_PENDING_DIAGRAM_EXTRA_WAIT: 2000,
+} as const;
+
+/**
  * Main interface for DOM operations
  *
  * This interface provides abstraction for DOM operations to ensure
@@ -90,4 +112,15 @@ export interface IDomGateway {
    * Stops SPA monitoring
    */
   stopSPAMonitoring(): void;
+
+  /**
+   * Waits for content stabilization including Mermaid diagrams
+   * @param container - Container element to monitor
+   * @param maxWaitTime - Maximum wait time in milliseconds (optional)
+   * @returns Promise that resolves when content is stable
+   */
+  waitForContentStabilization(
+    container: Element,
+    maxWaitTime?: number
+  ): Promise<void>;
 }
