@@ -6,6 +6,7 @@ import {
 } from "../../../domain/heading-collection";
 
 import { RepositoryError, ValidationError } from "../../../domain/shared";
+import { addSvgClass } from "../../../shared/html/add-svg-class";
 
 /**
  * Input DTO for adding a heading section
@@ -199,13 +200,15 @@ export class AddHeadingSectionUseCase {
    * @throws Error if entity creation fails
    */
   private createHeadingSection(input: AddHeadingSectionInput): HeadingSection {
+    const rawContent =
+      input.content?.trim() ||
+      `<h${input.level}>${input.title.trim()}</h${input.level}>`;
+
     const sectionData = {
       level: input.level,
       tagName: `H${input.level}`,
       titleText: input.title.trim(),
-      contentHtml:
-        input.content?.trim() ||
-        `<h${input.level}>${input.title.trim()}</h${input.level}>`,
+      contentHtml: addSvgClass(rawContent), // Add CSS class to Mermaid SVG elements
       sourceUrl: input.sourceUrl,
       // Use custom ID if provided
       ...(input.id && { sectionId: input.id.trim() }),
