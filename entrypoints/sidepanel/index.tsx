@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { HeadingSection } from "../../domain/heading-collection/heading-section";
 import { GetHeadingSectionsInput } from "../../application/usecases/heading-collection";
+import { containsMermaidSvg } from "../../shared/html/is-mermaid-svg";
 import "./style.css";
 
 /**
@@ -178,10 +179,17 @@ function HeadingSectionItem({
       {/* Full Content (when expanded) */}
       {isExpanded && section.contentHtml && (
         <div className="section-content">
-          <div
-            dangerouslySetInnerHTML={{ __html: section.contentHtml }}
-            className="section-content-html"
-          />
+          {containsMermaidSvg(section.contentHtml) ? (
+            <div
+              className="dwpp-diagram-wrapper"
+              dangerouslySetInnerHTML={{ __html: section.contentHtml }}
+            />
+          ) : (
+            <div
+              className="section-content-html"
+              dangerouslySetInnerHTML={{ __html: section.contentHtml }}
+            />
+          )}
           <div className="section-content-link">
             <a
               href={section.sourceUrl}
@@ -563,13 +571,7 @@ function Sidepanel() {
         </div>
       )}
 
-      {/* Instructions */}
-      <div className="instructions">
-        <div className="instructions-title">💡 How to use:</div>
-        <div>• Ctrl+Click on any heading to collect it</div>
-        <div>• Ctrl+Shift+C to collect all sections on a page</div>
-        <div>• Ctrl+Shift+H to highlight collectible headings</div>
-      </div>
+      {/* <div className="instructions"></div> */}
     </div>
   );
 }
