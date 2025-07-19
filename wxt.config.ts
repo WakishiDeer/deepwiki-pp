@@ -8,7 +8,7 @@ export default defineConfig({
   },
   manifest: {
     name: "DeepWiki++",
-    version: "0.2.1",
+    version: "0.2.2",
     description: "Enhanced browsing tool for DeepWiki",
     permissions: ["tabs", "storage", "activeTab"],
     host_permissions: ["https://github.com/*", "https://deepwiki.com/*"],
