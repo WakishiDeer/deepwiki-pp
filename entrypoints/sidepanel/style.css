@@ -29,14 +29,47 @@
 
 .sidepanel-search {
   margin-bottom: 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .sidepanel-search-input {
   width: 100%;
-  padding: 6px 8px;
+  padding: 6px 32px 6px 8px; /* Right padding for clear button */
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.sidepanel-search-input:focus {
+  outline: none;
+  border-color: #4285f4;
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.1);
+}
+
+.sidepanel-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.sidepanel-search-clear:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #333;
 }
 
 .sidepanel-filters {
@@ -414,6 +447,21 @@
 
 .empty-state-subtitle {
   font-size: 14px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+  padding: 0;
+}
+
+.link-button:hover {
+  color: #1565c0;
+  text-decoration: none;
 }
 
 .instructions {
