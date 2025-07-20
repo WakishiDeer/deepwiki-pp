@@ -197,10 +197,15 @@
 
 .section-title-container {
   flex: 1;
+  min-width: 0; /* Enable flex item to shrink below its content size */
+  overflow: hidden; /* Hide overflowing content */
 }
 
 .section-title {
   margin: 0 0 4px 0;
+  overflow: hidden; /* Hide overflowing content */
+  text-overflow: ellipsis; /* Show ellipsis for truncated text */
+  white-space: nowrap; /* Prevent line breaks */
 }
 
 .section-title-h1 {
