@@ -1,5 +1,11 @@
 // filepath: entrypoints/sidepanel/index.tsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import ReactDOM from "react-dom/client";
 import { HeadingSection } from "../../domain/heading-collection/heading-section";
 import { GetHeadingSectionsInput } from "../../application/usecases/heading-collection";
@@ -329,32 +335,73 @@ function HeadingSectionItem({
  * Main Sidepanel component for DeepWiki++ heading section collection
  */
 function Sidepanel() {
-  const [sections, setSections] = useState<HeadingSection[]>([]);
+  // State for sections data
+  const [allSections, setAllSections] = useState<HeadingSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set()
   );
+
+  // Filter states (for API calls)
   const [filter, setFilter] = useState<GetHeadingSectionsInput>({});
-  const [searchText, setSearchText] = useState("");
   const [selectedLevel, setSelectedLevel] = useState<number | "">("");
   const [sortBy, setSortBy] = useState<
     "addedAt" | "level" | "titleText" | "sourceUrl"
   >("addedAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // Load sections from background script
-  const loadSections = useCallback(async () => {
+  // Local search state (for immediate UI feedback)
+  const [searchText, setSearchText] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Ref to track if initial load is complete
+  const isInitialLoadComplete = useRef(false);
+
+  // Filter sections locally based on search text
+  const filteredSections = useMemo(() => {
+    if (!searchText.trim()) {
+      return allSections;
+    }
+
+    const lowerSearchText = searchText.toLowerCase();
+    setIsSearching(true);
+
+    const filtered = allSections.filter((section) => {
+      const titleMatch = section.titleText
+        .toLowerCase()
+        .includes(lowerSearchText);
+      const urlMatch = section.sourceUrl
+        .toLowerCase()
+        .includes(lowerSearchText);
+      // Optional: search in content as well
+      const contentMatch = section.contentHtml
+        ?.toLowerCase()
+        .includes(lowerSearchText);
+
+      return titleMatch || urlMatch || contentMatch;
+    });
+
+    // Reset searching state after filtering
+    setTimeout(() => setIsSearching(false), 100);
+    return filtered;
+  }, [allSections, searchText]);
+
+  // Load all sections from background (without search filtering)
+  const loadAllSections = useCallback(async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load
+      if (!isInitialLoadComplete.current) {
+        setLoading(true);
+      }
       setError(null);
 
       const currentFilter: GetHeadingSectionsInput = {
         ...filter,
-        searchText: searchText.trim() || undefined,
         level: selectedLevel || undefined,
         sortBy,
         sortOrder,
+        // Note: searchText is NOT included here - handled locally
       };
 
       const response = await chrome.runtime.sendMessage({
@@ -363,7 +410,8 @@ function Sidepanel() {
       });
 
       if (response.success) {
-        setSections(response.sections || []);
+        setAllSections(response.sections || []);
+        isInitialLoadComplete.current = true;
       } else {
         setError(response.error || "Failed to load sections");
       }
@@ -372,12 +420,12 @@ function Sidepanel() {
     } finally {
       setLoading(false);
     }
-  }, [filter, searchText, selectedLevel, sortBy, sortOrder]);
+  }, [filter, selectedLevel, sortBy, sortOrder]); // searchText removed from dependencies
 
   // Load sections on component mount and when dependencies change
   useEffect(() => {
-    loadSections();
-  }, [loadSections]);
+    loadAllSections();
+  }, [loadAllSections]);
 
   // Listen for real-time section updates from content script
   useEffect(() => {
@@ -389,7 +437,7 @@ function Sidepanel() {
       if (message.action === "sectionAdded") {
         console.log("SidePanel: Section added, refreshing list");
         // Reload sections to show the new addition
-        loadSections();
+        loadAllSections();
       }
     };
 
@@ -407,7 +455,7 @@ function Sidepanel() {
         console.log(
           "SidePanel: Heading sections storage changed, refreshing list"
         );
-        loadSections();
+        loadAllSections();
       }
     };
 
@@ -419,7 +467,7 @@ function Sidepanel() {
       chrome.runtime.onMessage.removeListener(handleMessage);
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
-  }, [loadSections]);
+  }, [loadAllSections]);
 
   // Handle section expansion/collapse
   const handleToggleExpand = (section: HeadingSection) => {
@@ -456,7 +504,7 @@ function Sidepanel() {
 
       if (response.success) {
         // Optimistically update UI
-        setSections((prev) =>
+        setAllSections((prev) =>
           prev.filter((s) => s.sectionId !== section.sectionId)
         );
         console.log("SidePanel: Section removed successfully");
@@ -501,7 +549,7 @@ function Sidepanel() {
   // Expand/Collapse all sections
   const handleExpandAll = () => {
     setExpandedSections(
-      new Set(sections.map((s) => s.sectionId || s.titleText))
+      new Set(filteredSections.map((s) => s.sectionId || s.titleText))
     );
   };
 
@@ -528,7 +576,7 @@ function Sidepanel() {
       });
 
       if (response.success) {
-        setSections([]);
+        setAllSections([]);
         console.log("SidePanel: All sections cleared successfully");
       } else {
         setError(response.error || "Failed to clear sections");
@@ -541,9 +589,9 @@ function Sidepanel() {
   };
 
   // Get available heading levels from sections
-  const availableLevels = [...new Set(sections.map((s) => s.level))].sort();
+  const availableLevels = [...new Set(allSections.map((s) => s.level))].sort();
 
-  if (loading) {
+  if (loading && !isInitialLoadComplete.current) {
     return (
       <div className="loading-state">
         <div>Loading sections...</div>
@@ -556,7 +604,7 @@ function Sidepanel() {
       <div className="error-state">
         <div className="error-message">Error: {error}</div>
         <button
-          onClick={loadSections}
+          onClick={loadAllSections}
           className="sidepanel-button sidepanel-button-retry"
         >
           Retry
@@ -571,7 +619,15 @@ function Sidepanel() {
       <div className="sidepanel-header">
         <h1 className="sidepanel-title">📚 DeepWiki++ Sections</h1>
         <div className="sidepanel-subtitle">
-          {sections.length} collected section{sections.length !== 1 ? "s" : ""}
+          {isSearching ? (
+            <span>Searching...</span>
+          ) : (
+            <>
+              {filteredSections.length} / {allSections.length} section
+              {filteredSections.length !== 1 ? "s" : ""}
+              {searchText && ` matching "${searchText}"`}
+            </>
+          )}
         </div>
       </div>
 
@@ -586,6 +642,15 @@ function Sidepanel() {
             onChange={handleSearchChange}
             className="sidepanel-search-input"
           />
+          {searchText && (
+            <button
+              onClick={() => setSearchText("")}
+              className="sidepanel-search-clear"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Filters */}
@@ -612,13 +677,13 @@ function Sidepanel() {
           </button>
 
           <button
-            onClick={loadSections}
+            onClick={loadAllSections}
             className="sidepanel-button sidepanel-button-refresh"
           >
             Refresh
           </button>
 
-          {sections.length > 0 && (
+          {allSections.length > 0 && (
             <button
               onClick={handleClearAllSections}
               className="sidepanel-button sidepanel-button-clear-all"
@@ -667,17 +732,36 @@ function Sidepanel() {
       </div>
 
       {/* Sections List */}
-      {sections.length === 0 ? (
+      {filteredSections.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📄</div>
-          <div className="empty-state-title">No sections collected yet</div>
-          <div className="empty-state-subtitle">
-            Visit a wiki page and use Ctrl+Click on headings to collect sections
-          </div>
+          {searchText ? (
+            <>
+              <div className="empty-state-icon">�</div>
+              <div className="empty-state-title">No matching sections</div>
+              <div className="empty-state-subtitle">
+                Try a different search term or{" "}
+                <button
+                  onClick={() => setSearchText("")}
+                  className="link-button"
+                >
+                  clear the search
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="empty-state-icon">�📄</div>
+              <div className="empty-state-title">No sections collected yet</div>
+              <div className="empty-state-subtitle">
+                Visit a wiki page and use Ctrl+Click on headings to collect
+                sections
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div>
-          {sections.map((section, index) => (
+          {filteredSections.map((section, index) => (
             <HeadingSectionItem
               key={section.sectionId || `${index}-${section.titleText}`}
               section={section}
