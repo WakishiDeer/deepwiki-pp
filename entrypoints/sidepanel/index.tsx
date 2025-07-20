@@ -736,7 +736,7 @@ function Sidepanel() {
         <div className="empty-state">
           {searchText ? (
             <>
-              <div className="empty-state-icon">�</div>
+              <div className="empty-state-icon">🔍</div>
               <div className="empty-state-title">No matching sections</div>
               <div className="empty-state-subtitle">
                 Try a different search term or{" "}
@@ -750,7 +750,7 @@ function Sidepanel() {
             </>
           ) : (
             <>
-              <div className="empty-state-icon">�📄</div>
+              <div className="empty-state-icon">📂</div>
               <div className="empty-state-title">No sections collected yet</div>
               <div className="empty-state-subtitle">
                 Visit a wiki page and use Ctrl+Click on headings to collect
