@@ -157,7 +157,7 @@ function IndexOptions() {
       </div>
 
       <div className="options-footer">
-        <p className="version-info">DeepWiki++ v0.2.2</p>
+        <p className="version-info">DeepWiki++ v0.2.3</p>
         <p className="usage-info">
           The extension will switch between these hosts when you click the
           switch button in the popup.
