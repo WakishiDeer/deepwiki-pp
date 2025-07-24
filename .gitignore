@@ -16,6 +16,9 @@ web-ext.config.ts
 .samples
 docs
 
+# Dependency graph files
+dependency-graph.*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
