@@ -15,7 +15,7 @@
     "compile": "tsc --noEmit",
     "dependency-graph": "depcruise --config .dependency-cruiser.cjs --output-type dot . > dependency-graph.dot && (dot -Tsvg dependency-graph.dot -o dependency-graph.svg || echo \"Graphviz not found, dot file created\")",
     "dependency-graph:html": "depcruise --config .dependency-cruiser.cjs --output-type html . > dependency-graph.html",
-    "prebuild": "npm run compile && npm run dependency-graph:html",
+    "prebuild": "npm run compile && npm run dependency-graph:html && npm run dependency-graph",
     "postinstall": "wxt prepare",
     "test": "jest"
   },
